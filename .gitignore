@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Build output (Paperclip loads plugins from dist/, but it is built, never committed)
+dist/
+*.tsbuildinfo
+
+# Local SDK snapshots created by `paperclipai plugin init --sdk-path`
+.paperclip-sdk/
+
+# Test / coverage output
+coverage/
+
+# Local env files
+.env
+.env.*
+!.env.example
+
+# Logs and OS/editor cruft
+*.log
+npm-debug.log*
+pnpm-debug.log*
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+
+# Packed tarballs from `npm pack` / `pnpm pack`
+*.tgz
+
+# Claude Code per-user local settings
+.claude/settings.local.json
