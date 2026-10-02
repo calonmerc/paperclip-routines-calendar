@@ -1,0 +1,52 @@
+# Publish to npm when a GitHub release is published.
+# Modeled on gauderp/paperclip-github-manager's publish.yml.
+#
+# ⚠️ NEEDS SETUP before it can work:
+#   Add an `NPM_TOKEN` repository secret (Settings → Secrets and variables →
+#   Actions). Use an npm granular access token with publish rights for
+#   `paperclip-routines-calendar`. Until that secret exists, this workflow
+#   fails at the publish step.
+#
+# Release checklist: bump `version` in package.json AND src/manifest.ts
+# (they must match), commit, then create a GitHub release tagged v<version>.
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write # npm provenance
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Check release tag matches package and manifest versions
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(node -p "require('./package.json').version")"
+          manifest="$(grep -oP 'version:\s*"\K[^"]+' src/manifest.ts | head -1)"
+          echo "tag=$tag package=$pkg manifest=$manifest"
+          test "$tag" = "$pkg" && test "$pkg" = "$manifest"
+
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+
+      - run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
