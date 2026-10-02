@@ -1,11 +1,11 @@
 # Publish to npm when a GitHub release is published.
 # Modeled on gauderp/paperclip-github-manager's publish.yml.
 #
-# ⚠️ NEEDS SETUP before it can work:
-#   Add an `NPM_TOKEN` repository secret (Settings → Secrets and variables →
-#   Actions). Use an npm granular access token with publish rights for
-#   `paperclip-routines-calendar`. Until that secret exists, this workflow
-#   fails at the publish step.
+# Auth: npm trusted publishing (OIDC), so no secret is needed. One-time setup
+# (a first manual publish, then linking this repo/workflow on npmjs.com) is
+# in docs/RELEASING.md. Until that's done, the publish step fails.
+# An NPM_TOKEN secret is an optional fallback (see the same doc); npm tries
+# OIDC first.
 #
 # Release checklist: bump `version` in package.json AND src/manifest.ts
 # (they must match), commit, then create a GitHub release tagged v<version>.
@@ -17,7 +17,7 @@ on:
 
 permissions:
   contents: read
-  id-token: write # npm provenance
+  id-token: write # npm trusted publishing (OIDC) + provenance
 
 jobs:
   publish:
@@ -47,6 +47,11 @@ jobs:
       - run: pnpm test
       - run: pnpm build
 
+      # Trusted publishing needs npm >= 11.5.1 (Node 24 bundles 11.x).
+      - name: Check npm version
+        run: node -e "const [a,b,c]=process.argv[1].split('.').map(Number);if(a<11||(a===11&&(b<5||(b===5&&c<1))))throw new Error('npm '+process.argv[1]+' < 11.5.1')" "$(npm -v)"
+
       - run: npm publish --access public --provenance
         env:
+          # Optional fallback; empty when the secret isn't set.
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

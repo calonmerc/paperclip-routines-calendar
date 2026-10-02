@@ -5,6 +5,14 @@
   "type": "module",
   "license": "MIT",
   "author": "Kyle Menigoz",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/calonmerc/paperclip-routines-calendar.git"
+  },
+  "homepage": "https://github.com/calonmerc/paperclip-routines-calendar#readme",
+  "bugs": {
+    "url": "https://github.com/calonmerc/paperclip-routines-calendar/issues"
+  },
   "keywords": [
     "paperclip",
     "paperclip-plugin",

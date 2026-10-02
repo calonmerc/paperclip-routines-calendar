@@ -34,10 +34,13 @@ paperclipai plugin install paperclip-routines-calendar
 
 ### From a local checkout (development)
 
-Paperclip loads the built `dist/` output and never compiles plugin source, so
-build first:
+Paperclip loads the built `dist/` output and never compiles plugin source.
+`dist/` isn't committed to git, so a fresh clone must be built before it can be
+installed. The npm package already includes `dist/`.
 
 ```bash
+git clone https://github.com/calonmerc/paperclip-routines-calendar.git
+cd paperclip-routines-calendar
 pnpm install
 pnpm build            # or keep `pnpm dev` running for watch mode
 paperclipai plugin install .

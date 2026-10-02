@@ -106,6 +106,15 @@ and are **paused**, so routines that fire never do real work. Routines:
 | Release notes | `0 9 * * 2` + `0 15 * * 4` | America/Los_Angeles | two schedule triggers |
 | Inbound webhook triage | none (webhook) | n/a | unassigned, so the server forces it to paused |
 
+## Releasing
+
+npm trusted publishing (OIDC) from `.github/workflows/release.yml` on a
+published GitHub release. There's no token secret; the one-time setup is in
+[docs/RELEASING.md](docs/RELEASING.md). `package.json` `version` and
+`src/manifest.ts` `version` must match the tag. `dist/` is never committed:
+the npm tarball gets it from `prepublishOnly`, and git clones must
+`pnpm build`.
+
 ## Repo layout
 
 ```
