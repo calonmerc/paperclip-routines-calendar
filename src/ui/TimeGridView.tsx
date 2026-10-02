@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { dateKey, sameDate, type CalendarDate, type DayItem } from "../lib/calendar.js";
 import { DEFAULT_LAYOUT_OPTIONS, MINUTES_PER_DAY, layoutDay, wallMinute, type DayLayout } from "../lib/timegrid.js";
 import { Chip, itemKey, type ChipContext } from "./components.js";
@@ -19,6 +19,52 @@ function useNow(intervalMs: number): number {
 }
 
 const minuteToPx = (minute: number) => (minute / 60) * PX_PER_HOUR;
+
+/** Never shrink below this, even when a lot of page sits above the grid. */
+const MIN_FIT_PX = 320;
+
+function scrollParent(el: HTMLElement): HTMLElement | null {
+  for (let node = el.parentElement; node; node = node.parentElement) {
+    const { overflowY } = getComputedStyle(node);
+    if (overflowY === "auto" || overflowY === "scroll") return node;
+  }
+  return null;
+}
+
+/**
+ * Height that keeps `ref` within the visible area. The host scrolls its own
+ * <main>, not the window, so measure against the nearest scrolling ancestor:
+ * the element fills what's left below the content above it (with the page
+ * scrolled to the top), and is never taller than the visible area itself.
+ */
+function useFitHeight(ref: RefObject<HTMLElement | null>): number | undefined {
+  const [height, setHeight] = useState<number>();
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const scroller = scrollParent(el);
+    const measure = () => {
+      const viewTop = scroller ? scroller.getBoundingClientRect().top : 0;
+      const viewHeight = scroller ? scroller.clientHeight : window.innerHeight;
+      const scrollTop = scroller ? scroller.scrollTop : window.scrollY;
+      const padBottom = scroller ? parseFloat(getComputedStyle(scroller).paddingBottom) || 0 : 16;
+      const offset = el.getBoundingClientRect().top - viewTop + scrollTop;
+      const visible = viewHeight - 2 * padBottom;
+      setHeight(Math.min(visible, Math.max(MIN_FIT_PX, viewHeight - offset - padBottom)));
+    };
+    measure();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    if (scroller) observer?.observe(scroller);
+    // Content above the grid (legend wrapping, header) moves it down.
+    if (el.parentElement) observer?.observe(el.parentElement);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [ref]);
+  return height;
+}
 
 /**
  * Week (7 columns) or day (1 column) on a 24-hour axis in the display
@@ -44,6 +90,8 @@ export function TimeGridView({
   onOpenDay?: (date: CalendarDate) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const fitHeight = useFitHeight(rootRef);
   const now = useNow(60_000);
 
   const layouts = useMemo(
@@ -72,11 +120,19 @@ export function TimeGridView({
 
   return (
     <div
+      ref={rootRef}
       role="grid"
       aria-label="Routines by time of day"
-      style={{ border: `1px solid ${t.border}`, borderRadius: t.radius, overflow: "hidden" }}
+      style={{
+        border: `1px solid ${t.border}`,
+        borderRadius: t.radius,
+        overflow: "hidden",
+        display: "flex",
+        flexDirection: "column",
+        maxHeight: fitHeight,
+      }}
     >
-      <div role="row" style={{ display: "grid", gridTemplateColumns: columns, background: t.mutedBg }}>
+      <div role="row" style={{ flex: "none", display: "grid", gridTemplateColumns: columns, background: t.mutedBg }}>
         <div aria-hidden />
         {dates.map((date) => {
           const isToday = sameDate(date, today);
@@ -110,7 +166,7 @@ export function TimeGridView({
       </div>
 
       {hasDense && (
-        <div role="row" style={{ display: "grid", gridTemplateColumns: columns, borderTop: `1px solid ${t.border}` }}>
+        <div role="row" style={{ flex: "none", display: "grid", gridTemplateColumns: columns, borderTop: `1px solid ${t.border}` }}>
           <div style={{ fontSize: 10, color: t.muted, padding: "4px 6px", textAlign: "right" }}>Frequent</div>
           {dates.map((date, i) => (
             <div
@@ -126,7 +182,7 @@ export function TimeGridView({
         </div>
       )}
 
-      <div ref={scrollRef} style={{ maxHeight: "70vh", overflowY: "auto", borderTop: `1px solid ${t.border}` }}>
+      <div ref={scrollRef} style={{ flex: "1 1 auto", minHeight: 0, overflowY: "auto", borderTop: `1px solid ${t.border}` }}>
         <div style={{ display: "grid", gridTemplateColumns: columns, height: minuteToPx(MINUTES_PER_DAY), position: "relative" }}>
           <div aria-hidden style={{ position: "relative" }}>
             {hourLabels.map((label, h) =>

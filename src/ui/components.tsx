@@ -178,19 +178,22 @@ export function Legend({
   );
 }
 
-/** Narrow layout: a list of the days that have items. */
+/** Agenda view: a list of the days that have items. The only view on narrow pages. */
 export function Agenda({
   dates,
   days,
   today,
   ctx,
   emptyText,
+  detailed = false,
 }: {
   dates: CalendarDate[];
   days: ReadonlyMap<string, DayItem[]> | undefined;
   today: CalendarDate;
   ctx: ChipContext;
   emptyText: string;
+  /** Wide pages have room for each entry's agent and schedule. */
+  detailed?: boolean;
 }) {
   const heading = new Intl.DateTimeFormat(undefined, { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
   const withItems = dates.filter((date) => (days?.get(dateKey(date))?.length ?? 0) > 0);
@@ -206,7 +209,7 @@ export function Agenda({
               {sameDate(date, today) && <span style={{ color: t.muted, fontWeight: 400 }}> · Today</span>}
             </h2>
             {days!.get(key)!.map((item) => (
-              <Chip key={itemKey(item)} item={item} dayKey={key} ctx={ctx} />
+              <Chip key={itemKey(item)} item={item} dayKey={key} ctx={ctx} detailed={detailed} />
             ))}
           </section>
         );

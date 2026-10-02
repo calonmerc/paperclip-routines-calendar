@@ -142,19 +142,20 @@ the npm tarball gets it from `prepublishOnly`, and git clones must
 ```
 src/manifest.ts      plugin manifest (id, capabilities, UI slots)
 src/constants.ts     shared constants (page route path, routine page path)
-src/worker.ts        worker entry (definePlugin + runWorker); health only
+src/worker.ts        worker entry (definePlugin + runWorker); health + settings data
 src/lib/cron.ts      port of the server's cron parser (keep identical)
 src/lib/zoned.ts     Intl-based timezone helpers (wall time <-> instants)
 src/lib/occurrences.ts  bounded schedule expansion, server semantics
 src/lib/routines.ts  API DTOs -> schedule entries + run state; legend filter
 src/lib/colors.ts    stable per-agent colours
-src/lib/calendar.ts  month grid, week/day spans, day bucketing (viewer's timezone)
+src/lib/settings.ts  per-company settings (instanceConfigSchema) with defaults
+src/lib/calendar.ts  month grid, week/day/agenda spans, day bucketing (viewer's timezone)
 src/lib/timegrid.ts  week/day time-of-day layout (wall-clock rows, overlap lanes)
 src/ui/index.tsx     UI entry; named exports referenced by manifest slots
 src/ui/CalendarPage.tsx  page slot: header, view switch, data, notices
 src/ui/MonthView.tsx     month grid
 src/ui/TimeGridView.tsx  week/day 24-hour grid
-src/ui/components.tsx    shared chip, legend, agenda (narrow layout), notice
+src/ui/components.tsx    shared chip, legend filter, agenda view, notice
 src/ui/SidebarLink.tsx   sidebar slot
 src/ui/api.ts        same-origin REST fetch hook
 src/ui/storage.ts    localStorage prefs (view; filter per company)
@@ -252,7 +253,12 @@ the released packages), and the running dev instance.
   stored **per company** (migration `0164_plugin_config_company_scope`).
   - Read: `GET /api/plugins/:pluginId/config?companyId=`, or
     `ctx.config.get(companyId?)` in the worker.
-  - Write: `POST /api/plugins/:pluginId/config`; requires instance admin.
+  - Write: `POST /api/plugins/:pluginId/config` with body
+    `{ companyId, configJson }`; requires instance admin (verified).
+  - The host renders a form from the schema automatically at
+    `/:companyPrefix/company/settings/instance/plugins/:pluginId`
+    (Configuration tab), using `title`, `description`, `default`,
+    `minimum`/`maximum` (verified). No capability is needed to read config.
 - A `settingsPage` slot gives the plugin its own settings UI.
 - `ctx.state` (capabilities `plugin.state.read/write`) offers scoped key/value
   state (company, issue, and other scopes) for per-company preferences that

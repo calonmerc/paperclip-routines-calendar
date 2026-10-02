@@ -12,9 +12,11 @@ runs when across your whole company.
   company's navigation, at `/<company-prefix>/routine-calendar`).
 - Shows when each routine's schedules will fire, in your browser's timezone,
   coloured by the assigned agent. Switch between a **month** grid, a **week**
-  view and a **day** view. Week and day lay runs out by time of day, so
-  clusters (everything firing at 1 AM) stand out; runs at the same time sit
-  side by side. Click a day number or week-view heading to open that day.
+  view, a **day** view and an **agenda** (a day-by-day list of the month).
+  Week and day lay runs out by time of day, so clusters (everything firing at
+  1 AM) stand out; runs at the same time sit side by side. They fit the
+  window and scroll inside. Click a day number or week-view heading to open
+  that day.
 - Click any entry to open that routine's page in Paperclip.
 - Click an agent in the legend to hide or show its routines, or click
   "Won't run" to hide paused and disabled schedules. Hidden entries don't
@@ -25,13 +27,22 @@ runs when across your whole company.
 - Schedule times match Paperclip's own scheduler exactly, including its
   handling of daylight-saving changes (a skipped hour means no run; a repeated
   hour runs twice).
-- Very frequent schedules collapse into one "N×" entry per day (in week and
-  day views, only schedules that fire more than 24 times that day).
+- Very frequent schedules collapse into one "N×" entry per day. In week and
+  day views the threshold is a setting (see below), 24 runs a day by default.
 - Routines triggered only by webhook or API are listed below the calendar.
-- On narrow screens the month and week are shown as a day-by-day agenda.
-  The view you pick is remembered in your browser.
+- On narrow screens only the agenda is available. The view you pick is
+  remembered in your browser and comes back on a wider screen.
 
 It only reads data; it never changes routines.
+
+## Settings
+
+Per company, in Paperclip's company settings → Plugins → Routines Calendar
+(instance admins only):
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| Collapse frequent schedules in week and day views | 24 | A schedule that runs more than this many times in a day is shown as one "N×" entry above the time grid instead of one block per run. |
 
 ## Requirements
 

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
-import type { PluginPageProps } from "@paperclipai/plugin-sdk/ui";
+import { usePluginData, type PluginPageProps } from "@paperclipai/plugin-sdk/ui";
 import {
   DEFAULT_PLACE_OPTIONS,
   buildDaySpan,
+  buildMonthDaysSpan,
   buildMonthGrid,
   buildWeekSpan,
   offsetChangeDays,
@@ -16,7 +17,8 @@ import {
 } from "../lib/calendar.js";
 import { assignAgentColors, colorForAgent } from "../lib/colors.js";
 import { NO_FILTER, UNASSIGNED_KEY, agentKey, extractSchedules, filterEntries } from "../lib/routines.js";
-import { TIME_GRID_PLACE_OPTIONS } from "../lib/timegrid.js";
+import { DEFAULT_SETTINGS, type CalendarSettings } from "../lib/settings.js";
+import { timeGridPlaceOptions } from "../lib/timegrid.js";
 import { localTimeZone, zonedParts } from "../lib/zoned.js";
 import { useRoutineData } from "./api.js";
 import { Agenda, ChipStyles, Legend, Notice, describeEntry, type ChipContext } from "./components.js";
@@ -26,12 +28,13 @@ import { loadView, saveView, useStoredFilter } from "./storage.js";
 import { buttonStyle, t } from "./theme.js";
 
 const WEEK_STARTS_ON: WeekStart = 0;
-/** Below this page width the grid is unreadable, so show an agenda list. */
-const AGENDA_BELOW_PX = 640;
+/** Below this page width the grids are unreadable; only the agenda is offered. */
+const AGENDA_ONLY_BELOW_PX = 640;
 const VIEWS: { view: CalendarView; label: string }[] = [
   { view: "month", label: "Month" },
   { view: "week", label: "Week" },
   { view: "day", label: "Day" },
+  { view: "agenda", label: "Agenda" },
 ];
 
 function useIsNarrow(ref: RefObject<HTMLElement | null>, threshold: number): boolean {
@@ -56,6 +59,8 @@ function buildSpan(view: CalendarView, cursor: CalendarDate, timeZone: string): 
       return buildWeekSpan(cursor, timeZone, WEEK_STARTS_ON);
     case "day":
       return buildDaySpan(cursor, timeZone);
+    case "agenda":
+      return buildMonthDaysSpan(cursor.year, cursor.month, timeZone);
   }
 }
 
@@ -64,6 +69,7 @@ const utcOf = (date: CalendarDate) => Date.UTC(date.year, date.month - 1, date.d
 function viewTitle(view: CalendarView, cursor: CalendarDate, span: DateSpan): string {
   switch (view) {
     case "month":
+    case "agenda":
       return new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric", timeZone: "UTC" }).format(utcOf(cursor));
     case "week":
       return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).formatRange(
@@ -87,12 +93,18 @@ export function RoutineCalendarPage({ context }: PluginPageProps) {
     const { year, month, day } = zonedParts(Date.now(), displayTimeZone);
     return { year, month, day };
   }, [displayTimeZone]);
-  const [view, setViewState] = useState<CalendarView>(loadView);
+  const [chosenView, setViewState] = useState<CalendarView>(loadView);
   const [cursor, setCursor] = useState<CalendarDate>(today);
   const { data, loading, error, reload } = useRoutineData(context.companyId);
   const [filter, setFilter] = useStoredFilter(context.companyId);
   const rootRef = useRef<HTMLDivElement>(null);
-  const narrow = useIsNarrow(rootRef, AGENDA_BELOW_PX);
+  const narrow = useIsNarrow(rootRef, AGENDA_ONLY_BELOW_PX);
+  // Narrow pages show the agenda without overwriting the saved choice, so a
+  // wider window brings it back.
+  const view: CalendarView = narrow ? "agenda" : chosenView;
+  const settingsParams = useMemo(() => ({ companyId: context.companyId }), [context.companyId]);
+  const settings = usePluginData<CalendarSettings>("settings", settingsParams);
+  const collapseAbove = settings.data?.timeGridCollapseAbove ?? DEFAULT_SETTINGS.timeGridCollapseAbove;
 
   const setView = (next: CalendarView) => {
     setViewState(next);
@@ -107,16 +119,16 @@ export function RoutineCalendarPage({ context }: PluginPageProps) {
   const colors = useMemo(() => assignAgentColors(data?.agents ?? []), [data]);
   const agentNames = useMemo(() => new Map((data?.agents ?? []).map((a) => [a.id, a.name])), [data]);
   const span = useMemo(() => buildSpan(view, cursor, displayTimeZone), [view, cursor, displayTimeZone]);
-  // Lists (month grid, narrow agendas) collapse dense schedules sooner than the time grid.
-  const timeGrid = view === "day" || (view === "week" && !narrow);
+  // The month grid and agenda collapse dense schedules sooner than the time grid.
+  const timeGrid = view === "day" || view === "week";
   // Filter before placing, so "+N more" counts and time-grid lanes only count what's shown.
   const visibleEntries = useMemo(() => (schedules ? filterEntries(schedules.entries, filter) : null), [schedules, filter]);
   const placed = useMemo(
     () =>
       visibleEntries
-        ? placeOccurrences(visibleEntries, span, displayTimeZone, timeGrid ? TIME_GRID_PLACE_OPTIONS : DEFAULT_PLACE_OPTIONS)
+        ? placeOccurrences(visibleEntries, span, displayTimeZone, timeGrid ? timeGridPlaceOptions(collapseAbove) : DEFAULT_PLACE_OPTIONS)
         : null,
-    [visibleEntries, span, timeGrid, displayTimeZone],
+    [visibleEntries, span, timeGrid, collapseAbove, displayTimeZone],
   );
   const changeDays = useMemo(() => offsetChangeDays(span, displayTimeZone), [span, displayTimeZone]);
 
@@ -147,7 +159,7 @@ export function RoutineCalendarPage({ context }: PluginPageProps) {
   }
 
   const title = viewTitle(view, cursor, span);
-  const unit = view === "month" ? "month" : view === "week" ? "week" : "day";
+  const unit = view === "week" ? "week" : view === "day" ? "day" : "month";
   const usedAgents = (data?.agents ?? []).filter((agent) => schedules?.entries.some((entry) => entry.agentId === agent.id));
   const hasUnassigned = schedules?.entries.some((entry) => entry.agentId === null) ?? false;
   const legendItems = [
@@ -176,16 +188,8 @@ export function RoutineCalendarPage({ context }: PluginPageProps) {
         onOpenDay={view === "week" ? openDay : undefined}
       />
     );
-  } else if (narrow) {
-    body = (
-      <Agenda
-        dates={view === "month" ? span.dates.filter((date) => date.month === cursor.month) : span.dates}
-        days={placed?.days}
-        today={today}
-        ctx={ctx}
-        emptyText={`Nothing scheduled this ${unit}.`}
-      />
-    );
+  } else if (view === "agenda") {
+    body = <Agenda dates={span.dates} days={placed?.days} today={today} ctx={ctx} emptyText="Nothing scheduled this month." detailed={!narrow} />;
   } else {
     const grid = span as MonthGrid;
     body = (
@@ -213,6 +217,8 @@ export function RoutineCalendarPage({ context }: PluginPageProps) {
               key={option}
               type="button"
               aria-pressed={view === option}
+              disabled={narrow && option !== "agenda"}
+              title={narrow && option !== "agenda" ? "Needs a wider window" : undefined}
               onClick={() => setView(option)}
               style={{
                 ...buttonStyle,
@@ -224,22 +230,25 @@ export function RoutineCalendarPage({ context }: PluginPageProps) {
                 borderBottomRightRadius: i === VIEWS.length - 1 ? t.radius : 0,
                 background: view === option ? t.accent : "transparent",
                 fontWeight: view === option ? 600 : 400,
+                ...(narrow && option !== "agenda" ? { opacity: 0.45, cursor: "not-allowed" } : null),
               }}
             >
               {label}
             </button>
           ))}
         </div>
-        <button type="button" style={buttonStyle} onClick={() => setCursor((c) => shiftView(view, c, -1))} aria-label={`Previous ${unit}`}>
-          ‹
-        </button>
-        <button type="button" style={buttonStyle} onClick={() => setCursor(today)}>
-          Today
-        </button>
-        <button type="button" style={buttonStyle} onClick={() => setCursor((c) => shiftView(view, c, 1))} aria-label={`Next ${unit}`}>
-          ›
-        </button>
-        <strong style={{ minWidth: 150, textAlign: "center", fontSize: 16 }}>{title}</strong>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+          <button type="button" style={buttonStyle} onClick={() => setCursor((c) => shiftView(view, c, -1))} aria-label={`Previous ${unit}`}>
+            ‹
+          </button>
+          <button type="button" style={buttonStyle} onClick={() => setCursor(today)}>
+            Today
+          </button>
+          <button type="button" style={buttonStyle} onClick={() => setCursor((c) => shiftView(view, c, 1))} aria-label={`Next ${unit}`}>
+            ›
+          </button>
+          <strong style={{ minWidth: 150, textAlign: "center", fontSize: 16 }}>{title}</strong>
+        </div>
         <button type="button" style={buttonStyle} onClick={reload} disabled={loading}>
           {loading ? "Loading…" : "Refresh"}
         </button>

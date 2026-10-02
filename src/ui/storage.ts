@@ -26,7 +26,7 @@ function write(key: string, value: string) {
 
 export function loadView(): CalendarView {
   const stored = read("view");
-  return stored === "month" || stored === "week" || stored === "day" ? stored : "month";
+  return stored === "month" || stored === "week" || stored === "day" || stored === "agenda" ? stored : "month";
 }
 
 export function saveView(view: CalendarView) {

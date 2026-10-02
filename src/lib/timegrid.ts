@@ -15,9 +15,12 @@ export const MINUTES_PER_DAY = 24 * 60;
 
 /**
  * Placement for week/day views. Items get their own block unless a trigger
- * fires more than once an hour on average, so hourly schedules stay visible.
+ * fires more than `collapseAbove` times that day (a per-company setting,
+ * 24 by default, so hourly schedules stay visible).
  */
-export const TIME_GRID_PLACE_OPTIONS: PlaceOptions = { collapseAbove: 24, limits: DEFAULT_LIMITS };
+export function timeGridPlaceOptions(collapseAbove: number): PlaceOptions {
+  return { collapseAbove, limits: DEFAULT_LIMITS };
+}
 
 export interface TimedBlock {
   item: DayItem & { kind: "single" };

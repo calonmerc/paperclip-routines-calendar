@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildDaySpan,
+  buildMonthDaysSpan,
   buildWeekSpan,
   dateKey,
   offsetChangeDays,
@@ -8,9 +9,9 @@ import {
   shiftView,
   type DayItem,
 } from "../src/lib/calendar.js";
-import { DEFAULT_LIMITS } from "../src/lib/occurrences.js";
 import { extractSchedules, type RoutineListItemDto } from "../src/lib/routines.js";
-import { TIME_GRID_PLACE_OPTIONS, layoutDay } from "../src/lib/timegrid.js";
+import { layoutDay, timeGridPlaceOptions } from "../src/lib/timegrid.js";
+import { DEFAULT_SETTINGS } from "../src/lib/settings.js";
 import routines from "./fixtures/seed-routines.json" with { type: "json" };
 
 // Captured from a dev instance seeded by scripts/seed-dev.mjs (Paperclip 2026.1001.0).
@@ -53,11 +54,25 @@ describe("buildWeekSpan / buildDaySpan", () => {
   });
 });
 
+describe("buildMonthDaysSpan", () => {
+  it("covers exactly the month's days", () => {
+    const span = buildMonthDaysSpan(2026, 2, tz);
+    expect(span.dates.map(dateKey)).toHaveLength(28);
+    expect(dateKey(span.dates[0]!)).toBe("2026-02-01");
+    expect(iso(span.range.startMs)).toBe("2026-02-01T06:00:00.000Z");
+    expect(iso(span.range.endMs)).toBe("2026-03-01T06:00:00.000Z");
+  });
+});
+
 describe("shiftView", () => {
   it("steps by month, week or day", () => {
     expect(shiftView("month", d(2026, 12, 15), 1)).toEqual(d(2027, 1, 15));
     expect(shiftView("week", d(2026, 12, 29), 1)).toEqual(d(2027, 1, 5));
     expect(shiftView("day", d(2027, 1, 1), -1)).toEqual(d(2026, 12, 31));
+  });
+
+  it("steps the agenda by month", () => {
+    expect(shiftView("agenda", d(2026, 10, 31), 1)).toEqual(d(2026, 11, 30));
   });
 
   it("clamps the day when the target month is shorter", () => {
@@ -69,7 +84,7 @@ describe("shiftView", () => {
 describe("layoutDay (seed data, viewed from Chicago)", () => {
   const dayItems = (date: { year: number; month: number; day: number }) => {
     const span = buildDaySpan(date, tz);
-    return placeOccurrences(entries, span, tz, TIME_GRID_PLACE_OPTIONS).days.get(dateKey(date)) ?? [];
+    return placeOccurrences(entries, span, tz, timeGridPlaceOptions(DEFAULT_SETTINGS.timeGridCollapseAbove)).days.get(dateKey(date)) ?? [];
   };
   const titled = (title: string) => (b: { item: DayItem }) => b.item.entry.routineTitle === title;
 
@@ -86,7 +101,7 @@ describe("layoutDay (seed data, viewed from Chicago)", () => {
     expect(layoutDay(items, tz).timed.filter(titled("Health check every 4h (routine paused)"))).toHaveLength(6);
 
     const span = buildDaySpan(d(2026, 10, 14), tz);
-    const tight = placeOccurrences(entries, span, tz, { collapseAbove: 3, limits: DEFAULT_LIMITS }).days.get("2026-10-14")!;
+    const tight = placeOccurrences(entries, span, tz, timeGridPlaceOptions(3)).days.get("2026-10-14")!;
     const { dense } = layoutDay(tight, tz);
     expect(dense.map((i) => `${i.entry.routineTitle} ×${i.count}`)).toEqual(["Health check every 4h (routine paused) ×6"]);
   });

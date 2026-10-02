@@ -31,7 +31,8 @@ export interface MonthGrid extends DateSpan {
   dates: CalendarDate[];
 }
 
-export type CalendarView = "month" | "week" | "day";
+/** `agenda` is a day-by-day list of one month, readable at any width. */
+export type CalendarView = "month" | "week" | "day" | "agenda";
 
 export const GRID_DAYS = 42;
 
@@ -60,18 +61,24 @@ export function buildWeekSpan(anchor: CalendarDate, displayTimeZone: string, wee
   return spanFrom(startOfWeek(anchor, weekStartsOn), 7, displayTimeZone);
 }
 
+/** Just the days of one month (no leading/trailing grid days). */
+export function buildMonthDaysSpan(year: number, month: number, displayTimeZone: string): DateSpan {
+  return spanFrom({ year, month, day: 1 }, daysInMonth(year, month), displayTimeZone);
+}
+
 export function buildDaySpan(date: CalendarDate, displayTimeZone: string): DateSpan {
   return spanFrom(date, 1, displayTimeZone);
 }
 
 /**
- * The date `steps` views away: months for the month view, weeks for the
- * week view, days for the day view. Month steps keep the day of month,
- * clamped to the target month's length.
+ * The date `steps` views away: months for the month and agenda views, weeks
+ * for the week view, days for the day view. Month steps keep the day of
+ * month, clamped to the target month's length.
  */
 export function shiftView(view: CalendarView, date: CalendarDate, steps: number): CalendarDate {
   switch (view) {
-    case "month": {
+    case "month":
+    case "agenda": {
       const { year, month } = addMonths(date.year, date.month, steps);
       return { year, month, day: Math.min(date.day, daysInMonth(year, month)) };
     }
