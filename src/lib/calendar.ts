@@ -1,11 +1,11 @@
 /**
- * Month-view model: a 6-week grid in the viewer's timezone, with schedule
- * occurrences bucketed into local days.
+ * Calendar models in the viewer's timezone: month grid, week and day spans,
+ * with schedule occurrences bucketed into local days.
  */
 
 import { DEFAULT_LIMITS, expandCron, type ExpandLimits, type InstantRange } from "./occurrences.js";
 import type { ScheduleEntry } from "./routines.js";
-import { addDays, offsetAt, startOfZonedDay, weekdayOf, zonedParts } from "./zoned.js";
+import { addDays, daysInMonth, offsetAt, startOfZonedDay, weekdayOf, zonedParts } from "./zoned.js";
 
 export interface CalendarDate {
   year: number;
@@ -17,32 +17,69 @@ export interface CalendarDate {
 /** 0 = Sunday, 1 = Monday. */
 export type WeekStart = 0 | 1;
 
-export interface MonthGrid {
+/** Consecutive local dates and the instants they cover in the display timezone. */
+export interface DateSpan {
+  dates: CalendarDate[];
+  range: InstantRange;
+}
+
+export interface MonthGrid extends DateSpan {
   /** The month being shown. */
   year: number;
   month: number;
   /** 42 consecutive dates, starting on `weekStartsOn`. */
   dates: CalendarDate[];
-  /** Instants covered by the grid in the display timezone. */
-  range: InstantRange;
 }
+
+export type CalendarView = "month" | "week" | "day";
 
 export const GRID_DAYS = 42;
 
 export function buildMonthGrid(year: number, month: number, displayTimeZone: string, weekStartsOn: WeekStart = 0): MonthGrid {
-  const firstOfMonth = { year, month, day: 1 };
-  const lead = (weekdayOf(year, month, 1) - weekStartsOn + 7) % 7;
-  const gridStart = addDays(firstOfMonth, -lead);
-  const dates = Array.from({ length: GRID_DAYS }, (_, i) => addDays(gridStart, i));
+  const gridStart = startOfWeek({ year, month, day: 1 }, weekStartsOn);
+  return { year, month, ...spanFrom(gridStart, GRID_DAYS, displayTimeZone) };
+}
+
+function spanFrom(start: CalendarDate, days: number, displayTimeZone: string): DateSpan {
   return {
-    year,
-    month,
-    dates,
+    dates: Array.from({ length: days }, (_, i) => addDays(start, i)),
     range: {
-      startMs: startOfZonedDay(gridStart, displayTimeZone),
-      endMs: startOfZonedDay(addDays(gridStart, GRID_DAYS), displayTimeZone),
+      startMs: startOfZonedDay(start, displayTimeZone),
+      endMs: startOfZonedDay(addDays(start, days), displayTimeZone),
     },
   };
+}
+
+/** First day of the week containing `date`. */
+export function startOfWeek(date: CalendarDate, weekStartsOn: WeekStart = 0): CalendarDate {
+  return addDays(date, -((weekdayOf(date.year, date.month, date.day) - weekStartsOn + 7) % 7));
+}
+
+/** The 7 days of the week containing `anchor`. */
+export function buildWeekSpan(anchor: CalendarDate, displayTimeZone: string, weekStartsOn: WeekStart = 0): DateSpan {
+  return spanFrom(startOfWeek(anchor, weekStartsOn), 7, displayTimeZone);
+}
+
+export function buildDaySpan(date: CalendarDate, displayTimeZone: string): DateSpan {
+  return spanFrom(date, 1, displayTimeZone);
+}
+
+/**
+ * The date `steps` views away: months for the month view, weeks for the
+ * week view, days for the day view. Month steps keep the day of month,
+ * clamped to the target month's length.
+ */
+export function shiftView(view: CalendarView, date: CalendarDate, steps: number): CalendarDate {
+  switch (view) {
+    case "month": {
+      const { year, month } = addMonths(date.year, date.month, steps);
+      return { year, month, day: Math.min(date.day, daysInMonth(year, month)) };
+    }
+    case "week":
+      return addDays(date, steps * 7);
+    case "day":
+      return addDays(date, steps);
+  }
 }
 
 export function dateKey(date: CalendarDate): string {
@@ -82,7 +119,7 @@ export const DEFAULT_PLACE_OPTIONS: PlaceOptions = { collapseAbove: 3, limits: D
 
 export function placeOccurrences(
   entries: readonly ScheduleEntry[],
-  grid: MonthGrid,
+  span: DateSpan,
   displayTimeZone: string,
   options: PlaceOptions = DEFAULT_PLACE_OPTIONS,
 ): PlacedCalendar {
@@ -93,7 +130,7 @@ export function placeOccurrences(
   for (const entry of entries) {
     let result;
     try {
-      result = expandCron(entry.cronExpression, entry.timeZone, grid.range, options.limits);
+      result = expandCron(entry.cronExpression, entry.timeZone, span.range, options.limits);
     } catch (err) {
       failed.push({ entry, message: err instanceof Error ? err.message : String(err) });
       continue;
@@ -132,14 +169,14 @@ export function placeOccurrences(
 }
 
 /**
- * `dateKey`s of grid days on which the display timezone's UTC offset changes.
+ * `dateKey`s of span days on which the display timezone's UTC offset changes.
  * Times on those days can repeat or be skipped, so the UI labels them with a
  * zone abbreviation.
  */
-export function offsetChangeDays(grid: MonthGrid, displayTimeZone: string): Set<string> {
+export function offsetChangeDays(span: DateSpan, displayTimeZone: string): Set<string> {
   const result = new Set<string>();
-  let dayStart = startOfZonedDay(grid.dates[0]!, displayTimeZone);
-  for (const date of grid.dates) {
+  let dayStart = startOfZonedDay(span.dates[0]!, displayTimeZone);
+  for (const date of span.dates) {
     const nextStart = startOfZonedDay(addDays(date, 1), displayTimeZone);
     if (offsetAt(dayStart, displayTimeZone) !== offsetAt(nextStart - 1, displayTimeZone)) {
       result.add(dateKey(date));

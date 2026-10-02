@@ -10,16 +10,21 @@ runs when across your whole company.
 
 - Adds a **Routine calendar** page to each company (sidebar link under your
   company's navigation, at `/<company-prefix>/routine-calendar`).
-- Shows a month grid of when each routine's schedules will fire, in your
-  browser's timezone, coloured by the assigned agent.
+- Shows when each routine's schedules will fire, in your browser's timezone,
+  coloured by the assigned agent. Switch between a **month** grid, a **week**
+  view and a **day** view. Week and day lay runs out by time of day, so
+  clusters (everything firing at 1 AM) stand out; runs at the same time sit
+  side by side. Click a day number or week-view heading to open that day.
 - Routines that won't actually run (paused or archived routine, or disabled
   schedule) are shown faded and hatched.
 - Schedule times match Paperclip's own scheduler exactly, including its
   handling of daylight-saving changes (a skipped hour means no run; a repeated
   hour runs twice).
-- Very frequent schedules collapse into one "N×" entry per day.
+- Very frequent schedules collapse into one "N×" entry per day (in week and
+  day views, only schedules that fire more than 24 times that day).
 - Routines triggered only by webhook or API are listed below the calendar.
-- On narrow screens the month is shown as a day-by-day agenda.
+- On narrow screens the month and week are shown as a day-by-day agenda.
+  The view you pick is remembered in your browser.
 
 It only reads data; it never changes routines.
 

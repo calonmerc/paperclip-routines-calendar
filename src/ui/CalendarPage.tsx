@@ -1,26 +1,38 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import type { PluginPageProps } from "@paperclipai/plugin-sdk/ui";
 import {
-  addMonths,
+  DEFAULT_PLACE_OPTIONS,
+  buildDaySpan,
   buildMonthGrid,
-  dateKey,
+  buildWeekSpan,
   offsetChangeDays,
   placeOccurrences,
-  sameDate,
+  shiftView,
   type CalendarDate,
-  type DayItem,
+  type CalendarView,
+  type DateSpan,
+  type MonthGrid,
   type WeekStart,
 } from "../lib/calendar.js";
-import { UNASSIGNED_COLOR, assignAgentColors, colorForAgent } from "../lib/colors.js";
-import { RUN_STATE_LABELS, extractSchedules, type AgentDto, type ScheduleEntry } from "../lib/routines.js";
+import { assignAgentColors, colorForAgent } from "../lib/colors.js";
+import { extractSchedules } from "../lib/routines.js";
+import { TIME_GRID_PLACE_OPTIONS } from "../lib/timegrid.js";
 import { localTimeZone, zonedParts } from "../lib/zoned.js";
 import { useRoutineData } from "./api.js";
-import { buttonStyle, chipStyle, t } from "./theme.js";
+import { Agenda, Legend, Notice, describeEntry, type ChipContext } from "./components.js";
+import { MonthView } from "./MonthView.js";
+import { TimeGridView } from "./TimeGridView.js";
+import { buttonStyle, t } from "./theme.js";
 
-const MAX_ITEMS_PER_CELL = 5;
 const WEEK_STARTS_ON: WeekStart = 0;
 /** Below this page width the grid is unreadable, so show an agenda list. */
 const AGENDA_BELOW_PX = 640;
+const VIEW_STORAGE_KEY = "paperclip-routines-calendar:view";
+const VIEWS: { view: CalendarView; label: string }[] = [
+  { view: "month", label: "Month" },
+  { view: "week", label: "Week" },
+  { view: "day", label: "Day" },
+];
 
 function useIsNarrow(ref: RefObject<HTMLElement | null>, threshold: number): boolean {
   const [narrow, setNarrow] = useState(false);
@@ -36,47 +48,109 @@ function useIsNarrow(ref: RefObject<HTMLElement | null>, threshold: number): boo
   return narrow;
 }
 
+function loadView(): CalendarView {
+  try {
+    const stored = localStorage.getItem(VIEW_STORAGE_KEY);
+    if (stored === "month" || stored === "week" || stored === "day") return stored;
+  } catch {
+    // storage unavailable
+  }
+  return "month";
+}
+
+function saveView(view: CalendarView) {
+  try {
+    localStorage.setItem(VIEW_STORAGE_KEY, view);
+  } catch {
+    // storage unavailable
+  }
+}
+
+function buildSpan(view: CalendarView, cursor: CalendarDate, timeZone: string): DateSpan | MonthGrid {
+  switch (view) {
+    case "month":
+      return buildMonthGrid(cursor.year, cursor.month, timeZone, WEEK_STARTS_ON);
+    case "week":
+      return buildWeekSpan(cursor, timeZone, WEEK_STARTS_ON);
+    case "day":
+      return buildDaySpan(cursor, timeZone);
+  }
+}
+
+const utcOf = (date: CalendarDate) => Date.UTC(date.year, date.month - 1, date.day);
+
+function viewTitle(view: CalendarView, cursor: CalendarDate, span: DateSpan): string {
+  switch (view) {
+    case "month":
+      return new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric", timeZone: "UTC" }).format(utcOf(cursor));
+    case "week":
+      return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).formatRange(
+        utcOf(span.dates[0]!),
+        utcOf(span.dates[span.dates.length - 1]!),
+      );
+    case "day":
+      return new Intl.DateTimeFormat(undefined, {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        timeZone: "UTC",
+      }).format(utcOf(cursor));
+  }
+}
+
 export function RoutineCalendarPage({ context }: PluginPageProps) {
   const displayTimeZone = useMemo(() => localTimeZone(), []);
-  const today = useMemo(() => zonedParts(Date.now(), displayTimeZone), [displayTimeZone]);
-  const [cursor, setCursor] = useState({ year: today.year, month: today.month });
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const today = useMemo((): CalendarDate => {
+    const { year, month, day } = zonedParts(Date.now(), displayTimeZone);
+    return { year, month, day };
+  }, [displayTimeZone]);
+  const [view, setViewState] = useState<CalendarView>(loadView);
+  const [cursor, setCursor] = useState<CalendarDate>(today);
   const { data, loading, error, reload } = useRoutineData(context.companyId);
   const rootRef = useRef<HTMLDivElement>(null);
   const narrow = useIsNarrow(rootRef, AGENDA_BELOW_PX);
 
+  const setView = (next: CalendarView) => {
+    setViewState(next);
+    saveView(next);
+  };
+  const openDay = (date: CalendarDate) => {
+    setCursor(date);
+    setView("day");
+  };
+
   const schedules = useMemo(() => (data ? extractSchedules(data.routines) : null), [data]);
   const colors = useMemo(() => assignAgentColors(data?.agents ?? []), [data]);
   const agentNames = useMemo(() => new Map((data?.agents ?? []).map((a) => [a.id, a.name])), [data]);
-  const grid = useMemo(
-    () => buildMonthGrid(cursor.year, cursor.month, displayTimeZone, WEEK_STARTS_ON),
-    [cursor, displayTimeZone],
-  );
+  const span = useMemo(() => buildSpan(view, cursor, displayTimeZone), [view, cursor, displayTimeZone]);
+  // Lists (month grid, narrow agendas) collapse dense schedules sooner than the time grid.
+  const timeGrid = view === "day" || (view === "week" && !narrow);
   const placed = useMemo(
-    () => (schedules ? placeOccurrences(schedules.entries, grid, displayTimeZone) : null),
-    [schedules, grid, displayTimeZone],
-  );
-
-  const changeDays = useMemo(() => offsetChangeDays(grid, displayTimeZone), [grid, displayTimeZone]);
-
-  const timeFormat = useMemo(
-    () => new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit", timeZone: displayTimeZone }),
-    [displayTimeZone],
-  );
-  // On DST-change days the same clock time can occur twice, so add the zone.
-  const zonedTimeFormat = useMemo(
     () =>
-      new Intl.DateTimeFormat(undefined, {
-        hour: "numeric",
-        minute: "2-digit",
-        timeZoneName: "short",
-        timeZone: displayTimeZone,
-      }),
-    [displayTimeZone],
+      schedules
+        ? placeOccurrences(schedules.entries, span, displayTimeZone, timeGrid ? TIME_GRID_PLACE_OPTIONS : DEFAULT_PLACE_OPTIONS)
+        : null,
+    [schedules, span, timeGrid, displayTimeZone],
   );
-  const monthTitle = new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric", timeZone: "UTC" }).format(
-    Date.UTC(cursor.year, cursor.month - 1, 1),
-  );
+  const changeDays = useMemo(() => offsetChangeDays(span, displayTimeZone), [span, displayTimeZone]);
+
+  const ctx = useMemo((): ChipContext => {
+    const timeFormat = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit", timeZone: displayTimeZone });
+    // On DST-change days the same clock time can occur twice, so add the zone.
+    const zonedTimeFormat = new Intl.DateTimeFormat(undefined, {
+      hour: "numeric",
+      minute: "2-digit",
+      timeZoneName: "short",
+      timeZone: displayTimeZone,
+    });
+    return {
+      colorFor: (agentId) => colorForAgent(colors, agentId),
+      agentName: (agentId) => (agentId ? agentNames.get(agentId) ?? "Unknown agent" : "Unassigned"),
+      timeFormatFor: (dayKey) => (changeDays.has(dayKey) ? zonedTimeFormat : timeFormat),
+    };
+  }, [colors, agentNames, changeDays, displayTimeZone]);
+
   const weekdayNames = useMemo(() => {
     const fmt = new Intl.DateTimeFormat(undefined, { weekday: "short", timeZone: "UTC" });
     // 2023-01-01 was a Sunday.
@@ -87,37 +161,87 @@ export function RoutineCalendarPage({ context }: PluginPageProps) {
     return <div style={{ padding: 24, color: t.muted }}>Select a company to see its routine calendar.</div>;
   }
 
-  const shift = (months: number) => {
-    setCursor((c) => addMonths(c.year, c.month, months));
-    setExpanded(new Set());
-  };
-
-  const usedAgents = (data?.agents ?? []).filter((agent) =>
-    schedules?.entries.some((entry) => entry.agentId === agent.id),
-  );
+  const title = viewTitle(view, cursor, span);
+  const unit = view === "month" ? "month" : view === "week" ? "week" : "day";
+  const usedAgents = (data?.agents ?? []).filter((agent) => schedules?.entries.some((entry) => entry.agentId === agent.id));
   const hasUnassigned = schedules?.entries.some((entry) => entry.agentId === null) ?? false;
+
+  let body;
+  if (timeGrid) {
+    body = (
+      <TimeGridView
+        dates={span.dates}
+        days={placed?.days}
+        today={today}
+        displayTimeZone={displayTimeZone}
+        ctx={ctx}
+        detailed={view === "day"}
+        onOpenDay={view === "week" ? openDay : undefined}
+      />
+    );
+  } else if (narrow) {
+    body = (
+      <Agenda
+        dates={view === "month" ? span.dates.filter((date) => date.month === cursor.month) : span.dates}
+        days={placed?.days}
+        today={today}
+        ctx={ctx}
+        emptyText={`Nothing scheduled this ${unit}.`}
+      />
+    );
+  } else {
+    const grid = span as MonthGrid;
+    body = (
+      <MonthView
+        key={`${grid.year}-${grid.month}`}
+        grid={grid}
+        days={placed?.days}
+        today={today}
+        title={title}
+        weekdayNames={weekdayNames}
+        ctx={ctx}
+        onOpenDay={openDay}
+      />
+    );
+  }
 
   return (
     <div ref={rootRef} style={{ padding: 16, color: t.fg, fontSize: 14, display: "grid", gap: 12 }}>
       <header style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
         <h1 style={{ fontSize: 20, fontWeight: 600, margin: 0, marginRight: "auto" }}>Routine calendar</h1>
-        <button type="button" style={buttonStyle} onClick={() => shift(-1)} aria-label="Previous month">
+        <div role="group" aria-label="View" style={{ display: "inline-flex" }}>
+          {VIEWS.map(({ view: option, label }, i) => (
+            <button
+              key={option}
+              type="button"
+              aria-pressed={view === option}
+              onClick={() => setView(option)}
+              style={{
+                ...buttonStyle,
+                borderRadius: 0,
+                marginLeft: i === 0 ? 0 : -1,
+                borderTopLeftRadius: i === 0 ? t.radius : 0,
+                borderBottomLeftRadius: i === 0 ? t.radius : 0,
+                borderTopRightRadius: i === VIEWS.length - 1 ? t.radius : 0,
+                borderBottomRightRadius: i === VIEWS.length - 1 ? t.radius : 0,
+                background: view === option ? t.accent : "transparent",
+                fontWeight: view === option ? 600 : 400,
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <button type="button" style={buttonStyle} onClick={() => setCursor((c) => shiftView(view, c, -1))} aria-label={`Previous ${unit}`}>
           ‹
         </button>
-        <button
-          type="button"
-          style={buttonStyle}
-          onClick={() => {
-            setCursor({ year: today.year, month: today.month });
-            setExpanded(new Set());
-          }}
-        >
+        <button type="button" style={buttonStyle} onClick={() => setCursor(today)}>
           Today
         </button>
-        <button type="button" style={buttonStyle} onClick={() => shift(1)} aria-label="Next month">
+        <button type="button" style={buttonStyle} onClick={() => setCursor((c) => shiftView(view, c, 1))} aria-label={`Next ${unit}`}>
           ›
         </button>
-        <strong style={{ minWidth: 150, textAlign: "center", fontSize: 16 }}>{monthTitle}</strong>
+        <strong style={{ minWidth: 150, textAlign: "center", fontSize: 16 }}>{title}</strong>
         <button type="button" style={buttonStyle} onClick={reload} disabled={loading}>
           {loading ? "Loading…" : "Refresh"}
         </button>
@@ -133,104 +257,9 @@ export function RoutineCalendarPage({ context }: PluginPageProps) {
         </div>
       )}
 
-      <Legend agents={usedAgents} colors={colors} showUnassigned={hasUnassigned} />
+      <Legend agents={usedAgents} colorFor={ctx.colorFor} showUnassigned={hasUnassigned} />
 
-      {narrow ? (
-        <Agenda
-          dates={grid.dates.filter((date) => date.month === cursor.month)}
-          days={placed?.days}
-          today={today}
-          renderChip={(item, key) => (
-            <Chip
-              key={`${item.entry.triggerId}-${item.kind === "single" ? item.instant : "dense"}`}
-              item={item}
-              color={colorForAgent(colors, item.entry.agentId)}
-              agentName={item.entry.agentId ? agentNames.get(item.entry.agentId) ?? "Unknown agent" : "Unassigned"}
-              timeFormat={changeDays.has(key) ? zonedTimeFormat : timeFormat}
-            />
-          )}
-        />
-      ) : (
-      <div role="grid" aria-label={`Routines for ${monthTitle}`} style={{ border: `1px solid ${t.border}`, borderRadius: t.radius, overflow: "hidden" }}>
-        <div role="row" style={rowStyle}>
-          {weekdayNames.map((name) => (
-            <div key={name} role="columnheader" style={{ padding: "6px 8px", fontSize: 12, color: t.muted, background: t.mutedBg }}>
-              {name}
-            </div>
-          ))}
-        </div>
-        {Array.from({ length: 6 }, (_, week) => (
-          <div key={week} role="row" style={rowStyle}>
-            {grid.dates.slice(week * 7, week * 7 + 7).map((date) => {
-              const key = dateKey(date);
-              const items = placed?.days.get(key) ?? [];
-              const isExpanded = expanded.has(key);
-              const visible = isExpanded ? items : items.slice(0, MAX_ITEMS_PER_CELL);
-              const hidden = items.length - visible.length;
-              const inMonth = date.month === cursor.month;
-              const isToday = sameDate(date, today);
-              return (
-                <div
-                  key={key}
-                  role="gridcell"
-                  aria-label={`${key}: ${items.length} scheduled`}
-                  style={{
-                    minHeight: 112,
-                    minWidth: 0,
-                    padding: 4,
-                    borderTop: `1px solid ${t.border}`,
-                    borderLeft: `1px solid ${t.border}`,
-                    background: inMonth ? t.card : t.mutedBg,
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 2,
-                  }}
-                >
-                  <div
-                    style={{
-                      alignSelf: "flex-start",
-                      fontSize: 12,
-                      fontWeight: isToday ? 700 : 500,
-                      color: inMonth ? t.fg : t.muted,
-                      padding: "0 4px",
-                      borderRadius: 999,
-                      outline: isToday ? `1.5px solid ${t.primary}` : undefined,
-                    }}
-                  >
-                    {date.day}
-                  </div>
-                  {visible.map((item) => (
-                    <Chip
-                      key={`${item.entry.triggerId}-${item.kind === "single" ? item.instant : "dense"}`}
-                      item={item}
-                      color={colorForAgent(colors, item.entry.agentId)}
-                      agentName={item.entry.agentId ? agentNames.get(item.entry.agentId) ?? "Unknown agent" : "Unassigned"}
-                      timeFormat={changeDays.has(key) ? zonedTimeFormat : timeFormat}
-                    />
-                  ))}
-                  {(hidden > 0 || isExpanded) && items.length > MAX_ITEMS_PER_CELL && (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setExpanded((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(key)) next.delete(key);
-                          else next.add(key);
-                          return next;
-                        })
-                      }
-                      style={{ ...linkButtonStyle, alignSelf: "flex-start" }}
-                    >
-                      {isExpanded ? "Show less" : `+${hidden} more`}
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        ))}
-      </div>
-      )}
+      {body}
 
       {placed && placed.truncated.length > 0 && (
         <Notice title="Some schedules are too frequent to show in full">
@@ -263,137 +292,5 @@ export function RoutineCalendarPage({ context }: PluginPageProps) {
         <div style={{ color: t.muted }}>This company has no scheduled routines yet.</div>
       )}
     </div>
-  );
-}
-
-const rowStyle: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
-  marginLeft: -1,
-};
-
-const linkButtonStyle: CSSProperties = {
-  font: "inherit",
-  fontSize: 11,
-  padding: "0 4px",
-  color: t.muted,
-  background: "none",
-  border: "none",
-  cursor: "pointer",
-  textDecoration: "underline",
-};
-
-function describeEntry(entry: ScheduleEntry): string {
-  return entry.triggerLabel ? `${entry.routineTitle} (${entry.triggerLabel})` : entry.routineTitle;
-}
-
-function Chip({
-  item,
-  color,
-  agentName,
-  timeFormat,
-}: {
-  item: DayItem;
-  color: string;
-  agentName: string;
-  timeFormat: Intl.DateTimeFormat;
-}) {
-  const { entry } = item;
-  const time = timeFormat.format(item.kind === "single" ? item.instant : item.firstInstant);
-  const tooltip = [
-    describeEntry(entry),
-    `${entry.cronExpression} (${entry.timeZone})`,
-    agentName,
-    RUN_STATE_LABELS[entry.runState],
-    item.kind === "collapsed" ? `${item.count} runs this day, first at ${time}` : null,
-  ]
-    .filter(Boolean)
-    .join("\n");
-
-  return (
-    <div style={chipStyle(color, entry.runState)} title={tooltip}>
-      <span style={{ color: t.muted, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
-        {item.kind === "collapsed" ? `${item.count}×` : time}
-      </span>
-      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-        {entry.routineTitle}
-      </span>
-    </div>
-  );
-}
-
-function Legend({
-  agents,
-  colors,
-  showUnassigned,
-}: {
-  agents: AgentDto[];
-  colors: ReadonlyMap<string, string>;
-  showUnassigned: boolean;
-}) {
-  const swatch = (color: string, label: string, runState: "active" | "routine-paused" = "active") => (
-    <span key={label} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-      <span
-        style={{
-          ...chipStyle(color, runState),
-          width: 14,
-          height: 12,
-          padding: 0,
-          borderLeftWidth: 14,
-        }}
-        aria-hidden
-      />
-      {label}
-    </span>
-  );
-  return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 16px", fontSize: 12, color: t.muted }}>
-      {[...agents]
-        .sort((a, b) => a.name.localeCompare(b.name))
-        .map((agent) => swatch(colorForAgent(colors, agent.id), agent.name))}
-      {showUnassigned && swatch(UNASSIGNED_COLOR, "Unassigned")}
-      {swatch(UNASSIGNED_COLOR, "Won't run (paused or disabled)", "routine-paused")}
-    </div>
-  );
-}
-
-function Agenda({
-  dates,
-  days,
-  today,
-  renderChip,
-}: {
-  dates: CalendarDate[];
-  days: ReadonlyMap<string, DayItem[]> | undefined;
-  today: CalendarDate;
-  renderChip: (item: DayItem, dayKey: string) => ReactNode;
-}) {
-  const heading = new Intl.DateTimeFormat(undefined, { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
-  const withItems = dates.filter((date) => (days?.get(dateKey(date))?.length ?? 0) > 0);
-  if (withItems.length === 0) return <div style={{ color: t.muted }}>Nothing scheduled this month.</div>;
-  return (
-    <div style={{ display: "grid", gap: 12 }}>
-      {withItems.map((date) => {
-        const key = dateKey(date);
-        return (
-          <section key={key} aria-label={key} style={{ display: "grid", gap: 3 }}>
-            <h2 style={{ fontSize: 13, fontWeight: sameDate(date, today) ? 700 : 600, margin: 0 }}>
-              {heading.format(Date.UTC(date.year, date.month - 1, date.day))}
-              {sameDate(date, today) && <span style={{ color: t.muted, fontWeight: 400 }}> · Today</span>}
-            </h2>
-            {days!.get(key)!.map((item) => renderChip(item, key))}
-          </section>
-        );
-      })}
-    </div>
-  );
-}
-
-function Notice({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section style={{ border: `1px solid ${t.border}`, borderRadius: t.radius, padding: 12, fontSize: 13 }}>
-      <div style={{ fontWeight: 600, marginBottom: 4 }}>{title}</div>
-      {children}
-    </section>
   );
 }

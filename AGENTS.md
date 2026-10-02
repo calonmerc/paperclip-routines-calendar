@@ -148,9 +148,13 @@ src/lib/zoned.ts     Intl-based timezone helpers (wall time <-> instants)
 src/lib/occurrences.ts  bounded schedule expansion, server semantics
 src/lib/routines.ts  API DTOs -> schedule entries + run state
 src/lib/colors.ts    stable per-agent colours
-src/lib/calendar.ts  month grid + day bucketing (viewer's timezone)
+src/lib/calendar.ts  month grid, week/day spans, day bucketing (viewer's timezone)
+src/lib/timegrid.ts  week/day time-of-day layout (wall-clock rows, overlap lanes)
 src/ui/index.tsx     UI entry; named exports referenced by manifest slots
-src/ui/CalendarPage.tsx  page slot: month grid / narrow agenda
+src/ui/CalendarPage.tsx  page slot: header, view switch, data, notices
+src/ui/MonthView.tsx     month grid
+src/ui/TimeGridView.tsx  week/day 24-hour grid
+src/ui/components.tsx    shared chip, legend, agenda (narrow layout), notice
 src/ui/SidebarLink.tsx   sidebar slot
 src/ui/api.ts        same-origin REST fetch hook
 tests/support/server-oracle.ts  port of server nextCronTickInTimeZone (test oracle)
