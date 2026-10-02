@@ -1,4 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
+import { useHostNavigation } from "@paperclipai/plugin-sdk/ui";
+import { routinePath } from "../constants.js";
 import { UNASSIGNED_COLOR } from "../lib/colors.js";
 import { dateKey, sameDate, type CalendarDate, type DayItem } from "../lib/calendar.js";
 import { RUN_STATE_LABELS, type AgentDto, type ScheduleEntry } from "../lib/routines.js";
@@ -48,6 +50,7 @@ export function Chip({
   detailed?: boolean;
   style?: CSSProperties;
 }) {
+  const nav = useHostNavigation();
   const { entry } = item;
   const agentName = ctx.agentName(entry.agentId);
   const time = ctx.timeFormatFor(dayKey).format(item.kind === "single" ? item.instant : item.firstInstant);
@@ -62,7 +65,12 @@ export function Chip({
     .join("\n");
 
   return (
-    <div style={{ ...chipStyle(ctx.colorFor(entry.agentId), entry.runState), ...style }} title={tooltip}>
+    <a
+      {...nav.linkProps(routinePath(entry.routineId))}
+      className={CHIP_CLASS}
+      style={{ ...chipStyle(ctx.colorFor(entry.agentId), entry.runState), textDecoration: "none", ...style }}
+      title={tooltip}
+    >
       {(showTime || item.kind === "collapsed") && (
         <span style={{ color: t.muted, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
           {item.kind === "collapsed" ? `${item.count}×` : time}
@@ -80,7 +88,21 @@ export function Chip({
           </span>
         )}
       </span>
-    </div>
+    </a>
+  );
+}
+
+const CHIP_CLASS = "routines-calendar-chip";
+
+/** Hover and focus states, which inline styles can't express. Render once per page. */
+export function ChipStyles() {
+  return (
+    <style>{`
+      .${CHIP_CLASS} { cursor: pointer; }
+      .${CHIP_CLASS}:hover { filter: brightness(0.94); opacity: 1 !important; }
+      .dark .${CHIP_CLASS}:hover { filter: brightness(1.25); }
+      .${CHIP_CLASS}:focus-visible { outline: 2px solid ${t.primary}; outline-offset: 1px; }
+    `}</style>
   );
 }
 

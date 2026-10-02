@@ -141,7 +141,7 @@ the npm tarball gets it from `prepublishOnly`, and git clones must
 
 ```
 src/manifest.ts      plugin manifest (id, capabilities, UI slots)
-src/constants.ts     shared constants (page route path)
+src/constants.ts     shared constants (page route path, routine page path)
 src/worker.ts        worker entry (definePlugin + runWorker); health only
 src/lib/cron.ts      port of the server's cron parser (keep identical)
 src/lib/zoned.ts     Intl-based timezone helpers (wall time <-> instants)

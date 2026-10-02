@@ -19,7 +19,7 @@ import { extractSchedules } from "../lib/routines.js";
 import { TIME_GRID_PLACE_OPTIONS } from "../lib/timegrid.js";
 import { localTimeZone, zonedParts } from "../lib/zoned.js";
 import { useRoutineData } from "./api.js";
-import { Agenda, Legend, Notice, describeEntry, type ChipContext } from "./components.js";
+import { Agenda, ChipStyles, Legend, Notice, describeEntry, type ChipContext } from "./components.js";
 import { MonthView } from "./MonthView.js";
 import { TimeGridView } from "./TimeGridView.js";
 import { buttonStyle, t } from "./theme.js";
@@ -207,6 +207,7 @@ export function RoutineCalendarPage({ context }: PluginPageProps) {
 
   return (
     <div ref={rootRef} style={{ padding: 16, color: t.fg, fontSize: 14, display: "grid", gap: 12 }}>
+      <ChipStyles />
       <header style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
         <h1 style={{ fontSize: 20, fontWeight: 600, margin: 0, marginRight: "auto" }}>Routine calendar</h1>
         <div role="group" aria-label="View" style={{ display: "inline-flex" }}>

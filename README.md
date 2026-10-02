@@ -15,6 +15,7 @@ runs when across your whole company.
   view and a **day** view. Week and day lay runs out by time of day, so
   clusters (everything firing at 1 AM) stand out; runs at the same time sit
   side by side. Click a day number or week-view heading to open that day.
+- Click any entry to open that routine's page in Paperclip.
 - Routines that won't actually run (paused or archived routine, or disabled
   schedule) are shown faded and hatched.
 - Schedule times match Paperclip's own scheduler exactly, including its
