@@ -1,4 +1,5 @@
 import type { PaperclipPluginManifestV1 } from "@paperclipai/plugin-sdk";
+import { ROUTE_PATH } from "./constants.js";
 
 const manifest: PaperclipPluginManifestV1 = {
   id: "paperclip-routines-calendar",
@@ -8,12 +9,7 @@ const manifest: PaperclipPluginManifestV1 = {
   description: "Visualize Paperclip routines on a calendar",
   author: "Kyle Menigoz",
   categories: ["ui"],
-  capabilities: [
-    "events.subscribe",
-    "plugin.state.read",
-    "plugin.state.write",
-    "ui.dashboardWidget.register"
-  ],
+  capabilities: ["ui.page.register", "ui.sidebar.register"],
   entrypoints: {
     worker: "./dist/worker.js",
     ui: "./dist/ui"
@@ -21,10 +17,17 @@ const manifest: PaperclipPluginManifestV1 = {
   ui: {
     slots: [
       {
-        type: "dashboardWidget",
-        id: "health-widget",
-        displayName: "Routines Calendar Health",
-        exportName: "DashboardWidget"
+        type: "page",
+        id: "routine-calendar",
+        displayName: "Routine calendar",
+        exportName: "RoutineCalendarPage",
+        routePath: ROUTE_PATH
+      },
+      {
+        type: "sidebar",
+        id: "routine-calendar-link",
+        displayName: "Routine calendar",
+        exportName: "RoutineCalendarSidebarLink"
       }
     ]
   }

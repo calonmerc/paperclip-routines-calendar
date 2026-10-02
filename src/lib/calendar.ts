@@ -5,7 +5,7 @@
 
 import { DEFAULT_LIMITS, expandCron, type ExpandLimits, type InstantRange } from "./occurrences.js";
 import type { ScheduleEntry } from "./routines.js";
-import { addDays, startOfZonedDay, weekdayOf, zonedParts } from "./zoned.js";
+import { addDays, offsetAt, startOfZonedDay, weekdayOf, zonedParts } from "./zoned.js";
 
 export interface CalendarDate {
   year: number;
@@ -129,6 +129,24 @@ export function placeOccurrences(
   }
 
   return { days, truncated, failed };
+}
+
+/**
+ * `dateKey`s of grid days on which the display timezone's UTC offset changes.
+ * Times on those days can repeat or be skipped, so the UI labels them with a
+ * zone abbreviation.
+ */
+export function offsetChangeDays(grid: MonthGrid, displayTimeZone: string): Set<string> {
+  const result = new Set<string>();
+  let dayStart = startOfZonedDay(grid.dates[0]!, displayTimeZone);
+  for (const date of grid.dates) {
+    const nextStart = startOfZonedDay(addDays(date, 1), displayTimeZone);
+    if (offsetAt(dayStart, displayTimeZone) !== offsetAt(nextStart - 1, displayTimeZone)) {
+      result.add(dateKey(date));
+    }
+    dayStart = nextStart;
+  }
+  return result;
 }
 
 export function itemInstant(item: DayItem): number {

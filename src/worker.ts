@@ -1,20 +1,11 @@
 import { definePlugin, runWorker } from "@paperclipai/plugin-sdk";
 
+// The calendar reads routines from the REST API in the UI (the worker SDK
+// can't list them; see AGENTS.md), so the worker only reports health for now.
 const plugin = definePlugin({
   async setup(ctx) {
-    ctx.events.on("issue.created", async (event) => {
-      const issueId = event.entityId ?? "unknown";
-      await ctx.state.set({ scopeKind: "issue", scopeId: issueId, stateKey: "seen" }, true);
-      ctx.logger.info("Observed issue.created", { issueId });
-    });
-
     ctx.data.register("health", async () => {
       return { status: "ok", checkedAt: new Date().toISOString() };
-    });
-
-    ctx.actions.register("ping", async () => {
-      ctx.logger.info("Ping action invoked");
-      return { pong: true, at: new Date().toISOString() };
     });
   },
 

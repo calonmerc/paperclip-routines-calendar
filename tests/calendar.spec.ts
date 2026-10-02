@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addMonths, buildMonthGrid, dateKey, placeOccurrences } from "../src/lib/calendar.js";
+import { addMonths, buildMonthGrid, dateKey, offsetChangeDays, placeOccurrences } from "../src/lib/calendar.js";
 import { AGENT_PALETTE, UNASSIGNED_COLOR, assignAgentColors, colorForAgent } from "../src/lib/colors.js";
 import { extractSchedules, runStateOf, type AgentDto, type RoutineListItemDto } from "../src/lib/routines.js";
 import agents from "./fixtures/seed-agents.json" with { type: "json" };
@@ -140,5 +140,14 @@ describe("placeOccurrences (seed data, October 2026, viewed from Chicago)", () =
     const tokyo = placeOccurrences(daily, tokyoGrid, "Asia/Tokyo");
     const first = tokyo.days.get("2026-10-01")![0]!;
     expect(first.kind === "single" && iso(first.instant)).toBe("2026-10-01T06:00:00.000Z");
+  });
+});
+
+describe("offsetChangeDays", () => {
+  it("flags only the local days with a DST change", () => {
+    const grid = buildMonthGrid(2026, 10, "America/Chicago");
+    expect([...offsetChangeDays(grid, "America/Chicago")]).toEqual(["2026-11-01"]);
+    expect([...offsetChangeDays(grid, "UTC")]).toEqual([]);
+    expect([...offsetChangeDays(buildMonthGrid(2026, 10, "Europe/London"), "Europe/London")]).toEqual(["2026-10-25"]);
   });
 });
