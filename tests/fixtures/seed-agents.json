@@ -1,0 +1,22 @@
+[
+  {
+    "id": "3ec75508-2202-45d4-8d46-dab8cab6a9e9",
+    "name": "Researcher",
+    "status": "paused"
+  },
+  {
+    "id": "6a4be804-63b0-4625-9e83-651b3ac7e2a2",
+    "name": "Planner",
+    "status": "paused"
+  },
+  {
+    "id": "84b42f8f-3847-4a7c-aea8-874efbd5b668",
+    "name": "Ops",
+    "status": "paused"
+  },
+  {
+    "id": "ff06f0be-5b73-4e6c-95af-6d425c28826e",
+    "name": "Writer",
+    "status": "paused"
+  }
+]
