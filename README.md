@@ -16,6 +16,10 @@ runs when across your whole company.
   clusters (everything firing at 1 AM) stand out; runs at the same time sit
   side by side. Click a day number or week-view heading to open that day.
 - Click any entry to open that routine's page in Paperclip.
+- Click an agent in the legend to hide or show its routines, or click
+  "Won't run" to hide paused and disabled schedules. Hidden entries don't
+  count towards a day's "+N more". The filter is remembered per company in
+  your browser.
 - Routines that won't actually run (paused or archived routine, or disabled
   schedule) are shown faded and hatched.
 - Schedule times match Paperclip's own scheduler exactly, including its

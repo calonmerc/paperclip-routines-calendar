@@ -146,7 +146,7 @@ src/worker.ts        worker entry (definePlugin + runWorker); health only
 src/lib/cron.ts      port of the server's cron parser (keep identical)
 src/lib/zoned.ts     Intl-based timezone helpers (wall time <-> instants)
 src/lib/occurrences.ts  bounded schedule expansion, server semantics
-src/lib/routines.ts  API DTOs -> schedule entries + run state
+src/lib/routines.ts  API DTOs -> schedule entries + run state; legend filter
 src/lib/colors.ts    stable per-agent colours
 src/lib/calendar.ts  month grid, week/day spans, day bucketing (viewer's timezone)
 src/lib/timegrid.ts  week/day time-of-day layout (wall-clock rows, overlap lanes)
@@ -157,6 +157,7 @@ src/ui/TimeGridView.tsx  week/day 24-hour grid
 src/ui/components.tsx    shared chip, legend, agenda (narrow layout), notice
 src/ui/SidebarLink.tsx   sidebar slot
 src/ui/api.ts        same-origin REST fetch hook
+src/ui/storage.ts    localStorage prefs (view; filter per company)
 tests/support/server-oracle.ts  port of server nextCronTickInTimeZone (test oracle)
 tests/fixtures/      routines/agents captured from the seeded dev instance
 tests/*.spec.ts      vitest

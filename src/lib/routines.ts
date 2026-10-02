@@ -124,3 +124,25 @@ export function extractSchedules(routines: readonly RoutineListItemDto[]): Sched
 
   return { entries, unscheduled, problems };
 }
+
+/** Filter key for routines with no assignee (agent ids are UUIDs, so no clash). */
+export const UNASSIGNED_KEY = "unassigned";
+
+export function agentKey(agentId: string | null): string {
+  return agentId ?? UNASSIGNED_KEY;
+}
+
+export interface EntryFilter {
+  /** `agentKey`s whose routines are hidden. */
+  hiddenAgents: ReadonlySet<string>;
+  /** Hide schedules that won't run (paused/archived routine, disabled trigger). */
+  hideInactive: boolean;
+}
+
+export const NO_FILTER: EntryFilter = { hiddenAgents: new Set(), hideInactive: false };
+
+export function filterEntries(entries: readonly ScheduleEntry[], filter: EntryFilter): ScheduleEntry[] {
+  return entries.filter(
+    (entry) => !filter.hiddenAgents.has(agentKey(entry.agentId)) && !(filter.hideInactive && entry.runState !== "active"),
+  );
+}

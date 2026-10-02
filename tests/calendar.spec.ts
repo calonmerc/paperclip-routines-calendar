@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { addMonths, buildMonthGrid, dateKey, offsetChangeDays, placeOccurrences } from "../src/lib/calendar.js";
 import { AGENT_PALETTE, UNASSIGNED_COLOR, assignAgentColors, colorForAgent } from "../src/lib/colors.js";
-import { extractSchedules, runStateOf, type AgentDto, type RoutineListItemDto } from "../src/lib/routines.js";
+import {
+  NO_FILTER,
+  UNASSIGNED_KEY,
+  extractSchedules,
+  filterEntries,
+  runStateOf,
+  type AgentDto,
+  type RoutineListItemDto,
+} from "../src/lib/routines.js";
 import agents from "./fixtures/seed-agents.json" with { type: "json" };
 import routines from "./fixtures/seed-routines.json" with { type: "json" };
 
@@ -48,6 +56,38 @@ describe("extractSchedules (seed data)", () => {
       triggers: [{ ...byTitle("Daily research brief").triggers[0]!, timezone: null }],
     };
     expect(extractSchedules([broken]).problems[0]?.message).toMatch(/no timezone/);
+  });
+});
+
+describe("filterEntries (seed data)", () => {
+  const { entries } = extractSchedules(seedRoutines);
+  const agentId = (name: string) => seedAgents.find((a) => a.name === name)!.id;
+
+  it("keeps everything with no filter", () => {
+    expect(filterEntries(entries, NO_FILTER)).toEqual(entries);
+  });
+
+  it("hides one agent's routines", () => {
+    const ops = agentId("Ops");
+    const visible = filterEntries(entries, { hiddenAgents: new Set([ops]), hideInactive: false });
+    expect(visible.length).toBeLessThan(entries.length);
+    expect(visible.some((e) => e.agentId === ops)).toBe(false);
+    expect(visible).toHaveLength(entries.filter((e) => e.agentId !== ops).length);
+  });
+
+  it("hides unassigned routines by the unassigned key", () => {
+    const unassigned = { ...entries[0]!, agentId: null };
+    expect(filterEntries([unassigned, entries[1]!], { hiddenAgents: new Set([UNASSIGNED_KEY]), hideInactive: false })).toEqual([
+      entries[1],
+    ]);
+  });
+
+  it("hides schedules that won't run", () => {
+    const visible = filterEntries(entries, { hiddenAgents: new Set(), hideInactive: true });
+    expect(visible.every((e) => e.runState === "active")).toBe(true);
+    expect(visible.map((e) => e.routineTitle)).not.toContain("Sunday archive sweep (trigger disabled)");
+    expect(visible.map((e) => e.routineTitle)).not.toContain("Health check every 4h (routine paused)");
+    expect(visible).toHaveLength(entries.length - 2);
   });
 });
 

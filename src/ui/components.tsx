@@ -3,7 +3,7 @@ import { useHostNavigation } from "@paperclipai/plugin-sdk/ui";
 import { routinePath } from "../constants.js";
 import { UNASSIGNED_COLOR } from "../lib/colors.js";
 import { dateKey, sameDate, type CalendarDate, type DayItem } from "../lib/calendar.js";
-import { RUN_STATE_LABELS, type AgentDto, type ScheduleEntry } from "../lib/routines.js";
+import { RUN_STATE_LABELS, type EntryFilter, type RunState, type ScheduleEntry } from "../lib/routines.js";
 import { chipStyle, t } from "./theme.js";
 
 /** What every view needs to render a chip. */
@@ -106,17 +106,48 @@ export function ChipStyles() {
   );
 }
 
+export interface LegendItem {
+  /** `agentKey` of the agent (or unassigned). */
+  key: string;
+  label: string;
+  color: string;
+}
+
+/** Agent colours; each item toggles that agent's routines on and off. */
 export function Legend({
-  agents,
-  colorFor,
-  showUnassigned,
+  items,
+  filter,
+  onToggleAgent,
+  onToggleInactive,
+  onShowAll,
 }: {
-  agents: AgentDto[];
-  colorFor: (agentId: string | null) => string;
-  showUnassigned: boolean;
+  items: LegendItem[];
+  filter: EntryFilter;
+  onToggleAgent: (key: string) => void;
+  onToggleInactive: () => void;
+  onShowAll: () => void;
 }) {
-  const swatch = (color: string, label: string, runState: "active" | "routine-paused" = "active") => (
-    <span key={label} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+  const toggle = (key: string, color: string, label: string, shown: boolean, onClick: () => void, runState: RunState = "active") => (
+    <button
+      key={key}
+      type="button"
+      aria-pressed={shown}
+      onClick={onClick}
+      title={shown ? `Hide ${label}` : `Show ${label}`}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+        font: "inherit",
+        fontSize: 12,
+        color: shown ? t.fg : t.muted,
+        background: "none",
+        border: "none",
+        padding: "2px 0",
+        cursor: "pointer",
+        textDecoration: shown ? "none" : "line-through",
+      }}
+    >
       <span
         style={{
           ...chipStyle(color, runState),
@@ -124,17 +155,25 @@ export function Legend({
           height: 12,
           padding: 0,
           borderLeftWidth: 14,
+          opacity: shown ? (runState === "active" ? 1 : 0.6) : 0.25,
         }}
         aria-hidden
       />
       {label}
-    </span>
+    </button>
   );
+  const anyHidden = filter.hideInactive || items.some((item) => filter.hiddenAgents.has(item.key));
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 16px", fontSize: 12, color: t.muted }}>
-      {[...agents].sort((a, b) => a.name.localeCompare(b.name)).map((agent) => swatch(colorFor(agent.id), agent.name))}
-      {showUnassigned && swatch(UNASSIGNED_COLOR, "Unassigned")}
-      {swatch(UNASSIGNED_COLOR, "Won't run (paused or disabled)", "routine-paused")}
+    <div role="group" aria-label="Filter by agent" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "2px 16px" }}>
+      {items.map((item) =>
+        toggle(item.key, item.color, item.label, !filter.hiddenAgents.has(item.key), () => onToggleAgent(item.key)),
+      )}
+      {toggle("inactive", UNASSIGNED_COLOR, "Won't run (paused or disabled)", !filter.hideInactive, onToggleInactive, "routine-paused")}
+      {anyHidden && (
+        <button type="button" onClick={onShowAll} style={{ ...linkButtonStyle, fontSize: 12, padding: 0 }}>
+          Show all
+        </button>
+      )}
     </div>
   );
 }

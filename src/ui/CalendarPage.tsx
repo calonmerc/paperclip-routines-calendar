@@ -15,19 +15,19 @@ import {
   type WeekStart,
 } from "../lib/calendar.js";
 import { assignAgentColors, colorForAgent } from "../lib/colors.js";
-import { extractSchedules } from "../lib/routines.js";
+import { NO_FILTER, UNASSIGNED_KEY, agentKey, extractSchedules, filterEntries } from "../lib/routines.js";
 import { TIME_GRID_PLACE_OPTIONS } from "../lib/timegrid.js";
 import { localTimeZone, zonedParts } from "../lib/zoned.js";
 import { useRoutineData } from "./api.js";
 import { Agenda, ChipStyles, Legend, Notice, describeEntry, type ChipContext } from "./components.js";
 import { MonthView } from "./MonthView.js";
 import { TimeGridView } from "./TimeGridView.js";
+import { loadView, saveView, useStoredFilter } from "./storage.js";
 import { buttonStyle, t } from "./theme.js";
 
 const WEEK_STARTS_ON: WeekStart = 0;
 /** Below this page width the grid is unreadable, so show an agenda list. */
 const AGENDA_BELOW_PX = 640;
-const VIEW_STORAGE_KEY = "paperclip-routines-calendar:view";
 const VIEWS: { view: CalendarView; label: string }[] = [
   { view: "month", label: "Month" },
   { view: "week", label: "Week" },
@@ -46,24 +46,6 @@ function useIsNarrow(ref: RefObject<HTMLElement | null>, threshold: number): boo
     return () => observer.disconnect();
   }, [ref, threshold]);
   return narrow;
-}
-
-function loadView(): CalendarView {
-  try {
-    const stored = localStorage.getItem(VIEW_STORAGE_KEY);
-    if (stored === "month" || stored === "week" || stored === "day") return stored;
-  } catch {
-    // storage unavailable
-  }
-  return "month";
-}
-
-function saveView(view: CalendarView) {
-  try {
-    localStorage.setItem(VIEW_STORAGE_KEY, view);
-  } catch {
-    // storage unavailable
-  }
 }
 
 function buildSpan(view: CalendarView, cursor: CalendarDate, timeZone: string): DateSpan | MonthGrid {
@@ -108,6 +90,7 @@ export function RoutineCalendarPage({ context }: PluginPageProps) {
   const [view, setViewState] = useState<CalendarView>(loadView);
   const [cursor, setCursor] = useState<CalendarDate>(today);
   const { data, loading, error, reload } = useRoutineData(context.companyId);
+  const [filter, setFilter] = useStoredFilter(context.companyId);
   const rootRef = useRef<HTMLDivElement>(null);
   const narrow = useIsNarrow(rootRef, AGENDA_BELOW_PX);
 
@@ -126,12 +109,14 @@ export function RoutineCalendarPage({ context }: PluginPageProps) {
   const span = useMemo(() => buildSpan(view, cursor, displayTimeZone), [view, cursor, displayTimeZone]);
   // Lists (month grid, narrow agendas) collapse dense schedules sooner than the time grid.
   const timeGrid = view === "day" || (view === "week" && !narrow);
+  // Filter before placing, so "+N more" counts and time-grid lanes only count what's shown.
+  const visibleEntries = useMemo(() => (schedules ? filterEntries(schedules.entries, filter) : null), [schedules, filter]);
   const placed = useMemo(
     () =>
-      schedules
-        ? placeOccurrences(schedules.entries, span, displayTimeZone, timeGrid ? TIME_GRID_PLACE_OPTIONS : DEFAULT_PLACE_OPTIONS)
+      visibleEntries
+        ? placeOccurrences(visibleEntries, span, displayTimeZone, timeGrid ? TIME_GRID_PLACE_OPTIONS : DEFAULT_PLACE_OPTIONS)
         : null,
-    [schedules, span, timeGrid, displayTimeZone],
+    [visibleEntries, span, timeGrid, displayTimeZone],
   );
   const changeDays = useMemo(() => offsetChangeDays(span, displayTimeZone), [span, displayTimeZone]);
 
@@ -165,6 +150,18 @@ export function RoutineCalendarPage({ context }: PluginPageProps) {
   const unit = view === "month" ? "month" : view === "week" ? "week" : "day";
   const usedAgents = (data?.agents ?? []).filter((agent) => schedules?.entries.some((entry) => entry.agentId === agent.id));
   const hasUnassigned = schedules?.entries.some((entry) => entry.agentId === null) ?? false;
+  const legendItems = [
+    ...[...usedAgents]
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((agent) => ({ key: agentKey(agent.id), label: agent.name, color: ctx.colorFor(agent.id) })),
+    ...(hasUnassigned ? [{ key: UNASSIGNED_KEY, label: "Unassigned", color: ctx.colorFor(null) }] : []),
+  ];
+  const toggleAgent = (key: string) => {
+    const hiddenAgents = new Set(filter.hiddenAgents);
+    if (hiddenAgents.has(key)) hiddenAgents.delete(key);
+    else hiddenAgents.add(key);
+    setFilter({ ...filter, hiddenAgents });
+  };
 
   let body;
   if (timeGrid) {
@@ -258,7 +255,13 @@ export function RoutineCalendarPage({ context }: PluginPageProps) {
         </div>
       )}
 
-      <Legend agents={usedAgents} colorFor={ctx.colorFor} showUnassigned={hasUnassigned} />
+      <Legend
+        items={legendItems}
+        filter={filter}
+        onToggleAgent={toggleAgent}
+        onToggleInactive={() => setFilter({ ...filter, hideInactive: !filter.hideInactive })}
+        onShowAll={() => setFilter(NO_FILTER)}
+      />
 
       {body}
 
