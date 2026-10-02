@@ -4,9 +4,24 @@ A [Paperclip](https://github.com/paperclipai/paperclip) plugin that shows
 routines (scheduled, recurring agent tasks) on a calendar, so you can see what
 runs when across your whole company.
 
-> **Status: early development.** The package currently contains the plugin
-> scaffold only. The calendar view isn't built yet. This README describes
-> only what exists today.
+> **Status: early development (0.1.0, unpublished).**
+
+## What it does
+
+- Adds a **Routine calendar** page to each company (sidebar link under your
+  company's navigation, at `/<company-prefix>/routine-calendar`).
+- Shows a month grid of when each routine's schedules will fire, in your
+  browser's timezone, coloured by the assigned agent.
+- Routines that won't actually run (paused or archived routine, or disabled
+  schedule) are shown faded and hatched.
+- Schedule times match Paperclip's own scheduler exactly, including its
+  handling of daylight-saving changes (a skipped hour means no run; a repeated
+  hour runs twice).
+- Very frequent schedules collapse into one "N×" entry per day.
+- Routines triggered only by webhook or API are listed below the calendar.
+- On narrow screens the month is shown as a day-by-day agenda.
+
+It only reads data; it never changes routines.
 
 ## Requirements
 

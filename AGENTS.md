@@ -81,9 +81,31 @@ paperclipai plugin data    paperclip-routines-calendar <dataKey> --payload-json 
 node scripts/seed-dev.mjs                  # company + agents + routines
 ```
 
-Reload behaviour: worker or manifest rebuild triggers a worker restart (about
-500ms debounce). A UI rebuild is picked up on the next mount, so hard-reload
-the page.
+Reload behaviour (verified on 2026.1001.0, which contradicts the docs):
+- A `dist/` rebuild restarts the worker. A UI rebuild is picked up on the next
+  page load.
+- **Manifest changes are NOT re-read** by the watcher. Slots, capabilities and
+  routes keep the installed version.
+- `paperclipai plugin upgrade <key>` re-reads the manifest, but **rejects**
+  any upgrade that adds capabilities (HTTP 400 "capability escalation"; there
+  is no approval API, despite the route docs mentioning `upgrade_pending`).
+- So after manifest edits in dev: `paperclipai plugin uninstall
+  paperclip-routines-calendar && paperclipai plugin install .`
+
+### Looking at the UI headlessly
+
+No browser ships with WSL. Playwright's headless Chromium works without
+extra system packages. Keep it out of the repo, in a scratch dir:
+
+```bash
+npm i playwright@1 && npx playwright install chromium
+```
+
+Then load `http://127.0.0.1:3100/ROU/routine-calendar` with
+`timezoneId: "America/Chicago"`. Screenshot it at 1440px and at 390px (light
+and `colorScheme: "dark"`; the host applies `.dark` from the OS preference),
+and collect console errors. Verify every UI change this way before calling
+it done.
 
 ### Seed data
 
@@ -119,8 +141,20 @@ the npm tarball gets it from `prepublishOnly`, and git clones must
 
 ```
 src/manifest.ts      plugin manifest (id, capabilities, UI slots)
-src/worker.ts        worker entry (definePlugin + runWorker)
+src/constants.ts     shared constants (page route path)
+src/worker.ts        worker entry (definePlugin + runWorker); health only
+src/lib/cron.ts      port of the server's cron parser (keep identical)
+src/lib/zoned.ts     Intl-based timezone helpers (wall time <-> instants)
+src/lib/occurrences.ts  bounded schedule expansion, server semantics
+src/lib/routines.ts  API DTOs -> schedule entries + run state
+src/lib/colors.ts    stable per-agent colours
+src/lib/calendar.ts  month grid + day bucketing (viewer's timezone)
 src/ui/index.tsx     UI entry; named exports referenced by manifest slots
+src/ui/CalendarPage.tsx  page slot: month grid / narrow agenda
+src/ui/SidebarLink.tsx   sidebar slot
+src/ui/api.ts        same-origin REST fetch hook
+tests/support/server-oracle.ts  port of server nextCronTickInTimeZone (test oracle)
+tests/fixtures/      routines/agents captured from the seeded dev instance
 tests/*.spec.ts      vitest
 scripts/             dev tooling (seeding)
 .claude/skills, .agents/   paperclip-create-plugin authoring skill (upstream copy)
@@ -291,6 +325,10 @@ the released packages), and the running dev instance.
   The real key is `paperclipPlugin`; theirs only works via the `dist/` fallback.
 - `/_plugins/<pluginKey>/ui/*` returns HTTP 500. It only works with the plugin
   UUID. The host uses the UUID, so this doesn't affect us.
+- `LOCAL_PLUGIN_DEVELOPMENT.md` says a manifest rebuild makes the host
+  re-read the manifest. It doesn't (see "Reload behaviour").
+- `POST /api/plugins/:id/upgrade` is documented as moving capability
+  escalations to `upgrade_pending`; it actually returns 400.
 - `routines` isn't in `PLUGIN_RESERVED_COMPANY_ROUTE_SEGMENTS`, but the host
   serves `/:companyPrefix/routines`. Don't claim that slug.
 - docs.paperclip.ing has no stable "develop a plugin locally" URL (404s). The
@@ -307,8 +345,11 @@ the released packages), and the running dev instance.
   available to plugin UI? GitHub Manager uses Tailwind class names, but only
   classes the host already compiled will exist. Plan: inline styles plus host
   CSS variables, with fallbacks.
-- **Rendering `page` slots in the browser** hasn't been checked by eye yet.
-  Only the bundle serving (200) and `/api/plugins/ui-contributions` were
-  verified.
+- **Capability planning:** the escalation check above means a published
+  version that adds a capability can't be upgraded in place; users would have
+  to uninstall and reinstall. Decide capabilities before publishing, and
+  re-test `upgrade` on newer Paperclip releases.
+- **Project-paused suppression:** routines in a paused project still show as
+  scheduled. The list endpoint doesn't expose project pause state.
 - **Archived triggers:** `RoutineListItem.triggers` doesn't expose
   `archived`. Unknown whether the list endpoint already filters them out.
