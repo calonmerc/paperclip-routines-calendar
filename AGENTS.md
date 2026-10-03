@@ -221,7 +221,7 @@ the released packages), and the running dev instance.
     colours.
   - Auth: none in `local_trusted` (verified). In authenticated deployments,
     the board session cookie is sent same-origin (`credentials: "include"`);
-    this is **not yet verified** on an authenticated instance.
+    verified by the maintainer on an authenticated instance (0.1.0).
 
 ### 2. UI slots
 
@@ -347,11 +347,6 @@ the released packages), and the running dev instance.
 
 ## Known unknowns
 
-- **Authenticated deployments:** does same-origin `fetch(..., {credentials:
-  "include"})` from plugin UI work against `authenticated` mode? Expected yes,
-  since it's the same session cookie and the kitchen-sink example relies on
-  it. Not yet verified. Fallback: a worker data handler using `http.outbound`
-  with an operator-supplied board API key secret.
 - **Styling:** which host CSS (Tailwind classes, CSS variables) is reliably
   available to plugin UI? GitHub Manager uses Tailwind class names, but only
   classes the host already compiled will exist. Plan: inline styles plus host
