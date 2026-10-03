@@ -5,7 +5,7 @@ import { COLLAPSE_ABOVE_RANGE, DEFAULT_SETTINGS } from "./lib/settings.js";
 const manifest: PaperclipPluginManifestV1 = {
   id: "paperclip-routines-calendar",
   apiVersion: 1,
-  version: "0.1.0",
+  version: "0.1.1",
   displayName: "Routines Calendar",
   description: "Visualize Paperclip routines on a calendar",
   author: "Kyle Menigoz",

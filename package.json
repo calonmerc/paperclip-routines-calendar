@@ -1,6 +1,6 @@
 {
   "name": "paperclip-routines-calendar",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Paperclip plugin that shows routine schedules on a calendar",
   "type": "module",
   "license": "MIT",
